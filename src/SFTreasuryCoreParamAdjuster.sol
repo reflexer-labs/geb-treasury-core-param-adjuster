@@ -10,10 +10,27 @@ abstract contract OracleRelayerLike {
 contract SFTreasuryCoreParamAdjuster {
     // --- Authorities ---
     mapping (address => uint) public authorizedAccounts;
-    function addAuthorization(address account) external isAuthorized { authorizedAccounts[account] = 1; emit AddAuthorization(account); }
-    function removeAuthorization(address account) external isAuthorized { authorizedAccounts[account] = 0; emit RemoveAuthorization(account); }
+    /**
+     * @notice Add auth to an account
+     * @param account Account to add auth to
+     */
+    function addAuthorization(address account) external isAuthorized {
+        authorizedAccounts[account] = 1;
+        emit AddAuthorization(account);
+    }
+    /**
+     * @notice Remove auth from an account
+     * @param account Account to remove auth from
+     */
+    function removeAuthorization(address account) external isAuthorized {
+        authorizedAccounts[account] = 0;
+        emit RemoveAuthorization(account);
+    }
+    /**
+    * @notice Checks whether msg.sender can call an authed function
+    **/
     modifier isAuthorized {
-        require(authorizedAccounts[msg.sender] == 1, "SFTreasuryCoreParamAdjuster/not-an-authority");
+        require(authorizedAccounts[msg.sender] == 1, "SFTreasuryCoreParamAdjuster/account-not-authorized");
         _;
     }
 
@@ -44,20 +61,21 @@ contract SFTreasuryCoreParamAdjuster {
     uint256                  public pullFundsMinThresholdMultiplier;   // [hundred]
     // The smallest value that can be set for the pullFundsMinThreshold var inside the SF treasury
     uint256                  public minPullFundsThreshold;             // [rad]
-    // The address that's allowed to call adjustMaxReward
-    address                  public rewardAdjuster;
+
+    // Mapping of whitelisted reward adjusters that can call adjustMaxReward
+    mapping(address => uint256) public rewardAdjusters;
 
     // Funded functions taken into account when computing the SF treasury params
     mapping(address => mapping(bytes4 => FundedFunction)) public whitelistedFundedFunctions;
 
-    // The address of the oracle relayer contract
-    OracleRelayerLike        public oracleRelayer;
     // The address of the treasury contract
     StabilityFeeTreasuryLike public treasury;
 
     // --- Events ---
     event AddAuthorization(address account);
     event RemoveAuthorization(address account);
+    event AddRewardAdjuster(address adjuster);
+    event RemoveRewardAdjuster(address adjuster);
     event ModifyParameters(bytes32 parameter, uint256 val);
     event ModifyParameters(bytes32 parameter, address addr);
     event ModifyParameters(address targetContract, bytes4 targetFunction, bytes32 parameter, uint256 val);
@@ -68,8 +86,6 @@ contract SFTreasuryCoreParamAdjuster {
 
     constructor(
       address treasury_,
-      address oracleRelayer_,
-      address rewardAdjuster_,
       uint256 updateDelay_,
       uint256 lastUpdateTime_,
       uint256 treasuryCapacityMultiplier_,
@@ -80,8 +96,6 @@ contract SFTreasuryCoreParamAdjuster {
       uint256 minPullFundsThreshold_
     ) public {
         require(treasury_ != address(0), "SFTreasuryCoreParamAdjuster/null-treasury");
-        require(oracleRelayer_ != address(0), "SFTreasuryCoreParamAdjuster/null-oracle-relayer");
-        require(rewardAdjuster_ != address(0), "SFTreasuryCoreParamAdjuster/null-reward-adjuster");
 
         require(updateDelay_ > 0, "SFTreasuryCoreParamAdjuster/null-update-delay");
         require(lastUpdateTime_ > now, "SFTreasuryCoreParamAdjuster/invalid-last-update-time");
@@ -95,8 +109,6 @@ contract SFTreasuryCoreParamAdjuster {
         authorizedAccounts[msg.sender]   = 1;
 
         treasury                         = StabilityFeeTreasuryLike(treasury_);
-        oracleRelayer                    = OracleRelayerLike(oracleRelayer_);
-        rewardAdjuster                   = rewardAdjuster_;
 
         updateDelay                      = updateDelay_;
         lastUpdateTime                   = lastUpdateTime_;
@@ -109,7 +121,6 @@ contract SFTreasuryCoreParamAdjuster {
 
         emit AddAuthorization(msg.sender);
         emit ModifyParameters("treasury", treasury_);
-        emit ModifyParameters("oracleRelayer", oracleRelayer_);
         emit ModifyParameters("updateDelay", updateDelay);
         emit ModifyParameters("lastUpdateTime", lastUpdateTime);
         emit ModifyParameters("minTreasuryCapacity", minTreasuryCapacity);
@@ -190,14 +201,8 @@ contract SFTreasuryCoreParamAdjuster {
     function modifyParameters(bytes32 parameter, address addr) external isAuthorized {
         require(addr != address(0), "SFTreasuryCoreParamAdjuster/null-address");
 
-        if (parameter == "oracleRelayer") {
-            oracleRelayer = OracleRelayerLike(addr);
-        }
-        else if (parameter == "treasury") {
+        if (parameter == "treasury") {
             treasury = StabilityFeeTreasuryLike(addr);
-        }
-        else if (parameter == "rewardAdjuster") {
-            rewardAdjuster = addr;
         }
         else revert("SFTreasuryCoreParamAdjuster/modify-unrecognized-param");
         emit ModifyParameters(parameter, addr);
@@ -221,6 +226,18 @@ contract SFTreasuryCoreParamAdjuster {
         }
         else revert("SFTreasuryCoreParamAdjuster/modify-unrecognized-param");
         emit ModifyParameters(targetContract, targetFunction, parameter, val);
+    }
+
+    // --- Reward Adjusters Management ---
+    function addRewardAdjuster(address adjuster) external isAuthorized {
+        require(rewardAdjusters[msg.sender] == 0, "SFTreasuryCoreParamAdjuster/adjuster-already-added");
+        rewardAdjusters[msg.sender] = 1;
+        emit AddRewardAdjuster(adjuster);
+    }
+    function removeRewardAdjuster(address adjuster) external isAuthorized {
+        require(rewardAdjusters[msg.sender] == 1, "SFTreasuryCoreParamAdjuster/adjuster-not-added");
+        rewardAdjusters[msg.sender] = 0;
+        emit RemoveRewardAdjuster(adjuster);
     }
 
     // --- Funded Function Management ---
@@ -271,7 +288,7 @@ contract SFTreasuryCoreParamAdjuster {
     * @param newMaxReward The new latestMaxReward for the funded function
     */
     function adjustMaxReward(address targetContract, bytes4 targetFunction, uint256 newMaxReward) external {
-        require(rewardAdjuster == msg.sender, "SFTreasuryCoreParamAdjuster/invalid-caller");
+        require(rewardAdjusters[msg.sender] == 1, "SFTreasuryCoreParamAdjuster/invalid-caller");
         require(newMaxReward >= 1, "SFTreasuryCoreParamAdjuster/invalid-value");
 
         // Check that the funded function exists
@@ -293,9 +310,6 @@ contract SFTreasuryCoreParamAdjuster {
     function setNewTreasuryParameters() external {
         require(both(lastUpdateTime < now, subtract(now, lastUpdateTime) >= updateDelay), "SFTreasuryCoreParamAdjuster/wait-more");
         lastUpdateTime = now;
-
-        // Get the latest redemption price
-        uint256 latestRedemptionPrice = oracleRelayer.redemptionPrice();
 
         // Calculate the amx treasury capacity
         uint256 newMaxTreasuryCapacity = multiply(treasuryCapacityMultiplier, dynamicRawTreasuryCapacity) / HUNDRED;
