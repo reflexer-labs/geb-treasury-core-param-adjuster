@@ -229,11 +229,19 @@ contract SFTreasuryCoreParamAdjuster {
     }
 
     // --- Reward Adjusters Management ---
+    /*
+    * @notify Add a new reward adjuster
+    * @param adjuster The address of the adjuster
+    */
     function addRewardAdjuster(address adjuster) external isAuthorized {
         require(rewardAdjusters[msg.sender] == 0, "SFTreasuryCoreParamAdjuster/adjuster-already-added");
         rewardAdjusters[msg.sender] = 1;
         emit AddRewardAdjuster(adjuster);
     }
+    /*
+    * @notify Remove an existing reward adjuster
+    * @param adjuster The address of the adjuster
+    */
     function removeRewardAdjuster(address adjuster) external isAuthorized {
         require(rewardAdjusters[msg.sender] == 1, "SFTreasuryCoreParamAdjuster/adjuster-not-added");
         rewardAdjusters[msg.sender] = 0;
