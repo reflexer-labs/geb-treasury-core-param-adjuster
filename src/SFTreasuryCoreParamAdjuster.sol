@@ -234,8 +234,8 @@ contract SFTreasuryCoreParamAdjuster {
     * @param adjuster The address of the adjuster
     */
     function addRewardAdjuster(address adjuster) external isAuthorized {
-        require(rewardAdjusters[msg.sender] == 0, "SFTreasuryCoreParamAdjuster/adjuster-already-added");
-        rewardAdjusters[msg.sender] = 1;
+        require(rewardAdjusters[adjuster] == 0, "SFTreasuryCoreParamAdjuster/adjuster-already-added");
+        rewardAdjusters[adjuster] = 1;
         emit AddRewardAdjuster(adjuster);
     }
     /*
@@ -243,8 +243,8 @@ contract SFTreasuryCoreParamAdjuster {
     * @param adjuster The address of the adjuster
     */
     function removeRewardAdjuster(address adjuster) external isAuthorized {
-        require(rewardAdjusters[msg.sender] == 1, "SFTreasuryCoreParamAdjuster/adjuster-not-added");
-        rewardAdjusters[msg.sender] = 0;
+        require(rewardAdjusters[adjuster] == 1, "SFTreasuryCoreParamAdjuster/adjuster-not-added");
+        rewardAdjusters[adjuster] = 0;
         emit RemoveRewardAdjuster(adjuster);
     }
 
@@ -316,7 +316,7 @@ contract SFTreasuryCoreParamAdjuster {
     * @notify Calculate and set new treasury params according to the latest dynamicRawTreasuryCapacity
     */
     function setNewTreasuryParameters() external {
-        require(both(lastUpdateTime < now, subtract(now, lastUpdateTime) >= updateDelay), "SFTreasuryCoreParamAdjuster/wait-more");
+        require(subtract(now, lastUpdateTime) >= updateDelay, "SFTreasuryCoreParamAdjuster/wait-more");
         lastUpdateTime = now;
 
         // Calculate the amx treasury capacity
