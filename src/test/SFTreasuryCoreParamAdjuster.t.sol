@@ -51,11 +51,11 @@ contract SFTreasuryCoreParamAdjusterTest is DSTest {
 
     uint256 public updateDelay = 1 days;
     uint256 public lastUpdateTime = 604411201;
-    uint256 public treasuryCapacityMultiplier = 1;
+    uint256 public treasuryCapacityMultiplier = 100;
     uint256 public minTreasuryCapacity = 1000 ether;
-    uint256 public minimumFundsMultiplier = 1;
+    uint256 public minimumFundsMultiplier = 100;
     uint256 public minMinimumFunds = 1 ether;
-    uint256 public pullFundsMinThresholdMultiplier = 1;
+    uint256 public pullFundsMinThresholdMultiplier = 100;
     uint256 public minPullFundsThreshold = 2 ether;
 
     function setUp() public {
@@ -142,12 +142,12 @@ contract SFTreasuryCoreParamAdjusterTest is DSTest {
         );
     }
 
-    function testFail_setup_null_treasuryCapacityMultiplier() public {
+    function testFail_setup_invalid_treasuryCapacityMultiplier() public {
         adjuster = new SFTreasuryCoreParamAdjuster(
             address(treasury),
             updateDelay,
             lastUpdateTime,
-            0,
+            99,
             minTreasuryCapacity,
             minimumFundsMultiplier,
             minMinimumFunds,
@@ -156,7 +156,7 @@ contract SFTreasuryCoreParamAdjusterTest is DSTest {
         );
     }
 
-    function testFail_setup_invalid_treasuryCapacityMultiplier() public {
+    function testFail_setup_invalid_treasuryCapacityMultiplier2() public {
         adjuster = new SFTreasuryCoreParamAdjuster(
             address(treasury),
             updateDelay,
@@ -184,21 +184,21 @@ contract SFTreasuryCoreParamAdjusterTest is DSTest {
         );
     }
 
-    function testFail_setup_null_minimumFundsMultiplier() public {
+    function testFail_setup_invalid_minimumFundsMultiplier() public {
         adjuster = new SFTreasuryCoreParamAdjuster(
             address(treasury),
             updateDelay,
             lastUpdateTime,
             treasuryCapacityMultiplier,
             minTreasuryCapacity,
-            0,
+            99,
             minMinimumFunds,
             pullFundsMinThresholdMultiplier,
             minPullFundsThreshold
         );
     }
 
-    function testFail_setup_invalid_minimumFundsMultiplier() public {
+    function testFail_setup_invalid_minimumFundsMultiplier2() public {
         adjuster = new SFTreasuryCoreParamAdjuster(
             address(treasury),
             updateDelay,
@@ -226,7 +226,7 @@ contract SFTreasuryCoreParamAdjusterTest is DSTest {
         );
     }
 
-    function testFail_setup_null_pullFundsMinThresholdMultiplier() public {
+    function testFail_setup_invalid_pullFundsMinThresholdMultiplier() public {
         adjuster = new SFTreasuryCoreParamAdjuster(
             address(treasury),
             updateDelay,
@@ -235,12 +235,12 @@ contract SFTreasuryCoreParamAdjusterTest is DSTest {
             minTreasuryCapacity,
             minimumFundsMultiplier,
             minMinimumFunds,
-            0,
+            99,
             minPullFundsThreshold
         );
     }
 
-    function testFail_setup_invalid_pullFundsMinThresholdMultiplier() public {
+    function testFail_setup_invalid_pullFundsMinThresholdMultiplier2() public {
         adjuster = new SFTreasuryCoreParamAdjuster(
             address(treasury),
             updateDelay,
@@ -317,12 +317,24 @@ contract SFTreasuryCoreParamAdjusterTest is DSTest {
         adjuster.modifyParameters("treasuryCapacityMultiplier", 1001);
     }
 
+    function testFail_modify_parameters_invalid_treasuryCapacityMultiplier2() public {
+        adjuster.modifyParameters("treasuryCapacityMultiplier", 99);
+    }
+
     function testFail_modify_parameters_invalid_minimumFundsMultiplier() public {
         adjuster.modifyParameters("minimumFundsMultiplier", 1001);
     }
 
+    function testFail_modify_parameters_invalid_minimumFundsMultiplier2() public {
+        adjuster.modifyParameters("minimumFundsMultiplier", 99);
+    }
+
     function testFail_modify_parameters_invalid_pullFundsMinThresholdMultiplier() public {
         adjuster.modifyParameters("pullFundsMinThresholdMultiplier", 1001);
+    }
+
+    function testFail_modify_parameters_invalid_pullFundsMinThresholdMultiplier2() public {
+        adjuster.modifyParameters("pullFundsMinThresholdMultiplier", 99);
     }
 
     function testFail_modify_parameters_uint_unauthorized() public {
@@ -486,15 +498,9 @@ contract SFTreasuryCoreParamAdjusterTest is DSTest {
 
         assertEq(adjuster.lastUpdateTime(), now);
 
-        // multipliers set to 1, dynamicRawTreasuryCapacity == 0
-        // for other cases refer to fuzz tests below
-        uint256 newMinTreasuryCapacity = minTreasuryCapacity / 100;
-        uint256 newPullFundsMinThreshold = minTreasuryCapacity / 100;
-
-
         assertEq(treasury.treasuryCapacity(), minTreasuryCapacity);
-        assertEq(treasury.minimumFundsRequired(), newMinTreasuryCapacity);
-        assertEq(treasury.pullFundsMinThreshold(), newPullFundsMinThreshold);
+        assertEq(treasury.minimumFundsRequired(), minTreasuryCapacity);
+        assertEq(treasury.pullFundsMinThreshold(), minTreasuryCapacity);
     }
 
     function testFail_set_new_treasury_parameters_before_delay() public {
@@ -534,17 +540,19 @@ contract SFTreasuryCoreParamAdjusterTest is DSTest {
 
             // setParams
             hevm.warp(now + adjuster.updateDelay() + 1);
-            usr.setNewTreasuryParameters();
+            try usr.setNewTreasuryParameters() {
+                assertEq(adjuster.lastUpdateTime(), now);
 
-            assertEq(adjuster.lastUpdateTime(), now);
+                newMaxTreasuryCapacity = adjuster.treasuryCapacityMultiplier() * adjuster.dynamicRawTreasuryCapacity() / 100 * 10**27;
+                newMinTreasuryCapacity = adjuster.minimumFundsMultiplier() * newMaxTreasuryCapacity / 100;
+                newPullFundsMinThreshold = adjuster.pullFundsMinThresholdMultiplier() * newMaxTreasuryCapacity / 100;
 
-            newMaxTreasuryCapacity = adjuster.treasuryCapacityMultiplier() * adjuster.dynamicRawTreasuryCapacity() / 100 * 10**27;
-            newMinTreasuryCapacity = adjuster.minimumFundsMultiplier() * newMaxTreasuryCapacity / 100;
-            newPullFundsMinThreshold = adjuster.pullFundsMinThresholdMultiplier() * newMaxTreasuryCapacity / 100;
-
-            assertEq(treasury.treasuryCapacity(), helper_maximum(minTreasuryCapacity, newMaxTreasuryCapacity));
-            assertEq(treasury.minimumFundsRequired(), helper_maximum(minMinimumFunds, newMinTreasuryCapacity));
-            assertEq(treasury.pullFundsMinThreshold(), helper_maximum(minPullFundsThreshold, newPullFundsMinThreshold));
+                assertEq(treasury.treasuryCapacity(), helper_maximum(minTreasuryCapacity, newMaxTreasuryCapacity));
+                assertEq(treasury.minimumFundsRequired(), helper_maximum(minMinimumFunds, newMinTreasuryCapacity));
+                assertEq(treasury.pullFundsMinThreshold(), helper_maximum(minPullFundsThreshold, newPullFundsMinThreshold));
+            } catch { // allowing for reverting when capacity lower than min funds
+                assertTrue(adjuster.lastUpdateTime() != now);
+            }
         }
     }
 }
