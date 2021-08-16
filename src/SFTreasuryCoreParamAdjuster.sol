@@ -99,11 +99,11 @@ contract SFTreasuryCoreParamAdjuster {
 
         require(updateDelay_ > 0, "SFTreasuryCoreParamAdjuster/null-update-delay");
         require(lastUpdateTime_ > now, "SFTreasuryCoreParamAdjuster/invalid-last-update-time");
-        require(both(treasuryCapacityMultiplier_ > 0, treasuryCapacityMultiplier_ <= THOUSAND), "SFTreasuryCoreParamAdjuster/invalid-capacity-mul");
+        require(both(treasuryCapacityMultiplier_ >= HUNDRED, treasuryCapacityMultiplier_ <= THOUSAND), "SFTreasuryCoreParamAdjuster/invalid-capacity-mul");
         require(minTreasuryCapacity_ > 0, "SFTreasuryCoreParamAdjuster/invalid-min-capacity");
-        require(both(minimumFundsMultiplier_ > 0, minimumFundsMultiplier_ <= THOUSAND), "SFTreasuryCoreParamAdjuster/invalid-min-funds-mul");
+        require(both(minimumFundsMultiplier_ >= HUNDRED, minimumFundsMultiplier_ <= THOUSAND), "SFTreasuryCoreParamAdjuster/invalid-min-funds-mul");
         require(minMinimumFunds_ > 0, "SFTreasuryCoreParamAdjuster/null-min-minimum-funds");
-        require(both(pullFundsMinThresholdMultiplier_ > 0, pullFundsMinThresholdMultiplier_ <= THOUSAND), "SFTreasuryCoreParamAdjuster/invalid-pull-funds-threshold-mul");
+        require(both(pullFundsMinThresholdMultiplier_ >= HUNDRED, pullFundsMinThresholdMultiplier_ <= THOUSAND), "SFTreasuryCoreParamAdjuster/invalid-pull-funds-threshold-mul");
         require(minPullFundsThreshold_ > 0, "SFTreasuryCoreParamAdjuster/null-min-pull-funds-threshold");
 
         authorizedAccounts[msg.sender]   = 1;
@@ -170,15 +170,15 @@ contract SFTreasuryCoreParamAdjuster {
             dynamicRawTreasuryCapacity = val;
         }
         else if (parameter == "treasuryCapacityMultiplier") {
-            require(val <= THOUSAND, "SFTreasuryCoreParamAdjuster/invalid-capacity-mul");
+            require(both(val >= HUNDRED, val <= THOUSAND), "SFTreasuryCoreParamAdjuster/invalid-capacity-mul");
             treasuryCapacityMultiplier = val;
         }
         else if (parameter == "minimumFundsMultiplier") {
-            require(val <= THOUSAND, "SFTreasuryCoreParamAdjuster/invalid-min-funds-mul");
+            require(both(val >= HUNDRED, val <= THOUSAND), "SFTreasuryCoreParamAdjuster/invalid-min-funds-mul");
             minimumFundsMultiplier = val;
         }
         else if (parameter == "pullFundsMinThresholdMultiplier") {
-            require(val <= THOUSAND, "SFTreasuryCoreParamAdjuster/invalid-pull-funds-threshold-mul");
+            require(both(val >= HUNDRED, val <= THOUSAND), "SFTreasuryCoreParamAdjuster/invalid-pull-funds-threshold-mul");
             pullFundsMinThresholdMultiplier = val;
         }
         else if (parameter == "minTreasuryCapacity") {
@@ -234,8 +234,8 @@ contract SFTreasuryCoreParamAdjuster {
     * @param adjuster The address of the adjuster
     */
     function addRewardAdjuster(address adjuster) external isAuthorized {
-        require(rewardAdjusters[msg.sender] == 0, "SFTreasuryCoreParamAdjuster/adjuster-already-added");
-        rewardAdjusters[msg.sender] = 1;
+        require(rewardAdjusters[adjuster] == 0, "SFTreasuryCoreParamAdjuster/adjuster-already-added");
+        rewardAdjusters[adjuster] = 1;
         emit AddRewardAdjuster(adjuster);
     }
     /*
@@ -243,8 +243,8 @@ contract SFTreasuryCoreParamAdjuster {
     * @param adjuster The address of the adjuster
     */
     function removeRewardAdjuster(address adjuster) external isAuthorized {
-        require(rewardAdjusters[msg.sender] == 1, "SFTreasuryCoreParamAdjuster/adjuster-not-added");
-        rewardAdjusters[msg.sender] = 0;
+        require(rewardAdjusters[adjuster] == 1, "SFTreasuryCoreParamAdjuster/adjuster-not-added");
+        rewardAdjusters[adjuster] = 0;
         emit RemoveRewardAdjuster(adjuster);
     }
 
@@ -316,7 +316,7 @@ contract SFTreasuryCoreParamAdjuster {
     * @notify Calculate and set new treasury params according to the latest dynamicRawTreasuryCapacity
     */
     function setNewTreasuryParameters() external {
-        require(both(lastUpdateTime < now, subtract(now, lastUpdateTime) >= updateDelay), "SFTreasuryCoreParamAdjuster/wait-more");
+        require(subtract(now, lastUpdateTime) >= updateDelay, "SFTreasuryCoreParamAdjuster/wait-more");
         lastUpdateTime = now;
 
         // Calculate the amx treasury capacity
